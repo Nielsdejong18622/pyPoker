@@ -1,9 +1,10 @@
 from enum import Enum
 from dataclasses import dataclass
 
+
 @dataclass
 class Card:
-        
+
     class Suit(Enum):
         c = 1
         s = 2
@@ -28,9 +29,8 @@ class Card:
     suit: Suit
     face: Face
 
-
     @classmethod
-    def color(cls, card : "Card") -> str:
+    def color(cls, card: "Card") -> str:
         return "grey"
 
     def __repr__(self) -> str:
@@ -38,8 +38,8 @@ class Card:
             val = {11: "J", 12: "Q", 13: "K", 14: "A"}[self.face.value]
         else:
             val = self.face.value
-        
+
         return f"{val}{self.suit.name}"
 
-
- 
+    def __hash__(self):
+        return self.face.value

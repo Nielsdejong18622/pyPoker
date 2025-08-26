@@ -8,7 +8,6 @@ from typing import Tuple
 import copy
 
 
-
 @dataclass
 class TableState:
 
@@ -17,7 +16,7 @@ class TableState:
         FLOP = 1
         TURN = 2
         RIVER = 3
-    
+
     # Describes the state of the table at a moment in time, as observed by a player at the moment of make_action.
     round: Round  # Which round are we currently in
     cards: Tuple[Card, ...]  # Cards on the table
@@ -60,11 +59,20 @@ class TableState:
     def pot(self) -> Money:
         return sum(player.bet for player in self.players)
 
-    @classmethod
-    def obscure_for_player(cls, other:"TableState", player_id:int) -> "TableState":
-        obscured_state:"TableState" = copy.deepcopy(other)
+    # Sums the players money.
+    def all_player_money(self) -> Money:
+        return sum(player.money for player in self.players)
 
-        # Set the cards of other players to empty. 
+    def get_big_stack_bully(self) -> Player:
+        """Get the player with the most chips"""
+        bigstack:Player = max(self.players, key= lambda player: player.money)
+        return self.players[self.players.index(bigstack)]
+
+    @classmethod
+    def obscure_for_player(cls, other: "TableState", player_id: int) -> "TableState":
+        obscured_state: "TableState" = copy.deepcopy(other)
+
+        # Set the cards of other players to empty.
         for idx, play in enumerate(obscured_state.players):
             if idx != player_id:
                 play.cards = ()

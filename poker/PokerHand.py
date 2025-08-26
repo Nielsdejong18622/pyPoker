@@ -8,9 +8,10 @@ from enum import Enum
 from functools import total_ordering
 from itertools import combinations
 
+
 @total_ordering
 class PokerHand:
-    
+
     class Tier(Enum):
         HIGH_CARD = 0
         ONE_PAIR = 1
@@ -23,7 +24,8 @@ class PokerHand:
         STRAIGHT_FLUSH = 8
         ROYAL_FLUSH = 9
 
-    def __init__(self, cards:Tuple[Card, ...]) -> None:
+    def __init__(self, cards: Tuple[Card, ...]) -> None:
+        """Evaluate the pokerHand"""
         assert len(cards) == 5, "PokerHand consists of 5 cards!"
         self.cards = cards
         self.tier, self.score = self._evaluate_score()
@@ -43,22 +45,28 @@ class PokerHand:
 
     @classmethod
     def random(cls):
-        """Constructs a random pokerhand. """
-        deck:Deck= Deck(shuffle=True)
-        cards = (deck.sample(), deck.sample(), deck.sample(), deck.sample(), deck.sample())
+        """Constructs a random pokerhand."""
+        deck: Deck = Deck(shuffle=True)
+        cards = (
+            deck.sample(),
+            deck.sample(),
+            deck.sample(),
+            deck.sample(),
+            deck.sample(),
+        )
         return PokerHand(cards)
 
     @classmethod
-    def best(cls, cards:Tuple[Card, ...]):
-        """Constructs the best Pokerhand out of the 7 available cards. """
+    def best(cls, cards: Tuple[Card, ...]):
+        """Constructs the best Pokerhand out of the available cards."""
         assert len(cards) >= 5, "PokerHand consists of 5 cards!"
-        best = min((PokerHand(combo) for combo in combinations(cards, 5)))
+        best = max((PokerHand(combo) for combo in combinations(cards, 5)))
         return best
 
     def _evaluate_score(self) -> Tuple[Tier, Score]:
-        """Scores the current Pokerhand. """
+        """Scores the current Pokerhand."""
         assert len(self.cards) == 5, "Pokerhands consists of exactly 5 cards!"
-        
+
         cards = list(self.cards)
         cards.sort(key=lambda x: x.face.value, reverse=True)
         faces = [card.face.value for card in cards]
@@ -85,12 +93,18 @@ class PokerHand:
 
         # TIER 10: ROYAL FLUSH
         if flush and faces == [14, 13, 12, 11, 10]:
-            return PokerHand.Tier.ROYAL_FLUSH, PokerHand.Tier.ROYAL_FLUSH.value * 1_000_000
+            return (
+                PokerHand.Tier.ROYAL_FLUSH,
+                PokerHand.Tier.ROYAL_FLUSH.value * 1_000_000,
+            )
 
         # TIER 9: STRAIGHT FLUSH
         if flush and straight:
             high_card = 5 if set(faces) == {14, 2, 3, 4, 5} else max(unique_faces)
-            return (PokerHand.Tier.STRAIGHT_FLUSH, PokerHand.Tier.STRAIGHT_FLUSH.value * 1_000_000 + high_card)
+            return (
+                PokerHand.Tier.STRAIGHT_FLUSH,
+                PokerHand.Tier.STRAIGHT_FLUSH.value * 1_000_000 + high_card,
+            )
 
         # TIER 8: FOUR OF A KIND
         if face_counts[0][1] == 4:
@@ -105,16 +119,25 @@ class PokerHand:
         if face_counts[0][1] == 3 and face_counts[1][1] == 2:
             trips = face_counts[0][0]
             pair = face_counts[1][0]
-            return (PokerHand.Tier.FULL_HOUSE, PokerHand.Tier.FULL_HOUSE.value * 1_000_000 + trips * 100 + pair)
+            return (
+                PokerHand.Tier.FULL_HOUSE,
+                PokerHand.Tier.FULL_HOUSE.value * 1_000_000 + trips * 100 + pair,
+            )
 
         # TIER 6: FLUSH
         if flush:
-            return (PokerHand.Tier.FLUSH, PokerHand.Tier.FLUSH.value * 1_000_000 + max(faces))
+            return (
+                PokerHand.Tier.FLUSH,
+                PokerHand.Tier.FLUSH.value * 1_000_000 + max(faces),
+            )
 
         # TIER 5: STRAIGHT
         if straight:
             high_card = 5 if set(faces) == {14, 2, 3, 4, 5} else max(unique_faces)
-            return (PokerHand.Tier.STRAIGHT, PokerHand.Tier.STRAIGHT.value * 1_000_000 + high_card)
+            return (
+                PokerHand.Tier.STRAIGHT,
+                PokerHand.Tier.STRAIGHT.value * 1_000_000 + high_card,
+            )
 
         # TIER 4: THREE OF A KIND
         if face_counts[0][1] == 3:
@@ -159,6 +182,9 @@ class PokerHand:
         # TIER 1: HIGH CARD
         return (
             PokerHand.Tier.HIGH_CARD,
-            faces[0] * 10000 + faces[1] * 1000 + faces[2] * 100 + faces[3] * 10 + faces[4],
+            faces[0] * 10000
+            + faces[1] * 1000
+            + faces[2] * 100
+            + faces[3] * 10
+            + faces[4],
         )
-

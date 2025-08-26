@@ -7,7 +7,7 @@ from .Card import Card# type: ignore
 from .Cards import Cards# type: ignore
 
 from .Action import Action # type: ignore
-from .BenchMarking import make_picture_money_over_time# type: ignore
+from .BenchMarking import make_picture_money_over_rounds# type: ignore
 from .Score import Score# type: ignore
 from .Strategy import Strategy# type: ignore
 from .Strategies import *

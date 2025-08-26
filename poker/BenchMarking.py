@@ -10,10 +10,8 @@ from poker.Table import Table
 from poker.TableState import TableState
 from poker.Player import Player
 
-import matplotlib.pyplot as plt
-import os
 
-def make_picture_money_over_time(
+def make_picture_money_over_rounds(
     players: tuple[Player, ...], n_pictures: int = 1, folder: str = "SampleRuns"
 ) -> None:
     """
@@ -28,35 +26,42 @@ def make_picture_money_over_time(
     Returns:
         None. Saves plots as JPEG images in the specified folder.
     """
+
+    # Lazy import.
+    import matplotlib.pyplot as plt
+    import os
+
     # Ensure the output directory exists
     os.makedirs(folder, exist_ok=True)
 
-    init: TableState = TableState.new_game(players=players)
-    table: Table = Table(init, loglevel=Table.LogLevel.QUIET)
+    table: Table = Table.construct_withPlayers(players)
 
     for i in range(n_pictures):
-        # print(f"Simulation table {i+1}")
-        table.reset()
         money_time = {idx: [p.money] for idx, p in enumerate(players)}
 
+        table.reset()
         while not table.done():
             table.step()
+            while table.round_underway() and not table.done():
+                table.step()
+
             for idx, p in enumerate(table.state.players):
                 money_time[idx].append(p.money)
 
-        print(f"Table {i+1} has a winner after {table.round_counter} rounds")
-        plt.figure(figsize=(10, 6))# type: ignore
+        winner: Player = table.getWinner()
+        print(
+            f"Table {i+1} has winning strategy {winner.strategy.__class__.__name__} after {table.round_counter} rounds"
+        )
+        plt.figure(figsize=(10, 6))  # type: ignore
         for idx, money_history in money_time.items():
             strategy_name = players[idx].strategy.__class__.__name__
-            plt.plot(money_history, label=f"Player {idx} ({strategy_name})")# type: ignore
+            plt.plot(money_history, label=f"Player {idx} ({strategy_name})")  # type: ignore
 
-        plt.title("Player Money Over Time")# type: ignore
-        plt.xlabel("Round")# type: ignore
-        plt.ylabel("Money")# type: ignore
-        plt.legend(title="Players")# type: ignore
-        plt.grid(True)# type: ignore
+        plt.title("Player Money over rounds")  # type: ignore
+        plt.xlabel("Round")  # type: ignore
+        plt.ylabel("Money")  # type: ignore
+        plt.legend(title="Players")  # type: ignore
+        plt.grid(True)  # type: ignore
         plt.tight_layout()
-        plt.savefig(f"{folder}/money_over_time_{i}.jpeg")# type: ignore
+        plt.savefig(f"{folder}/money_over_rounds_{i+1}.jpeg")  # type: ignore
         plt.close()
-        # print(f"Created picture {i+1}/{n_pictures} of money over time.")
-

@@ -10,6 +10,9 @@ from enum import Enum
 from copy import deepcopy
 from typing import Tuple
 
+import logging
+
+
 class Table:
 
     class Event(Enum):
@@ -26,47 +29,59 @@ class Table:
         DETERMINE_WINNER = 11
         DONE = 12
 
-    class LogLevel(Enum):   
-        """Set the loglevel to 3 (WARN) means all levels higher (or equal) to loglevel print."""
-        DEBUG = 0
-        INFO = 1
-        PLAYER_ACTION = 2
-        WARN = 3
-        QUIET = 4
-
-    def __init__(self, init_state: TableState, loglevel: LogLevel = LogLevel.INFO):
+    @classmethod
+    def construct_withPlayers(cls, players: Tuple[Player, ...]) -> "Table":
         """
-            Construct a simulator that simulates a poker table from an initial state onwards.
+        Construct a simulator that simulates a poker table with the given players.
+        """
+        return cls(init_state=TableState.new_game(players))
+
+    def __init__(self, init_state: TableState, loglevel=logging.WARNING):
+        """
+        Construct a simulator that simulates a poker table from an initial state onwards.
         """
         assert len(init_state.players) >= 1, "Requires atleast one players!"
         assert len(init_state.players) <= 22, "Limited up to 22 players!"
+        self._create_logger(terminal_level=loglevel)
         self._init_state: TableState = deepcopy(init_state)
-        self._loglevel = loglevel
         self.state = deepcopy(self._init_state)
-        self._queried : dict[int, bool] = {}
+        self._queried: dict[int, bool] = {}
         self._deck = Deck(shuffle=True)
         self.round_counter = 0
         self.reset()
 
-    # Warn on invalid action.
-    def _warn(self, msg: str) -> None:
-        if self._loglevel.value <= Table.LogLevel.WARN.value:
-            print(f"[WARNING]:{msg}")
+    def _create_logger(self, terminal_level) -> None:
+        # create logger for "Sample App"
+        self._logger = logging.getLogger(__name__)
+        self._logger.setLevel(logging.DEBUG)
 
-    # DEBUG events. 
-    def _debug(self, msg: str) -> None:
-        if self._loglevel.value <= Table.LogLevel.DEBUG.value:
-            print(f"[STEP]:{msg}")
+        # create file handler which logs even debug messages
+        fh = logging.FileHandler("Table.log", mode="w", encoding="utf-8")
+        # fh.setLevel(logging.DEBUG)
 
-    # Player actions.  
-    def _logaction(self, msg: str) -> None:
-        if self._loglevel.value <= Table.LogLevel.PLAYER_ACTION.value:
-            print(f"[ACTION]:{msg}")
+        # create console handler with a higher log level
+        import sys
 
-    # Dealer events.
-    def _loginfo(self, msg: str) -> None:
-        if self._loglevel.value <= Table.LogLevel.INFO.value:
-            print(f"[INFO]:{msg}")
+        ch = logging.StreamHandler(stream=sys.stdout)
+        ch.setLevel(terminal_level)
+
+        # create formatter and add it to the handlers
+        formatter = logging.Formatter(
+            "[%(asctime)s]%(levelname)8s:%(message)s ",
+            # + "(%(filename)s:%(lineno)s)",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        fh.setFormatter(formatter)
+        ch.setFormatter(formatter)
+
+        # add the handlers to the logger
+        self._logger.addHandler(ch)
+        self._logger.addHandler(fh)
+
+    def getWinner(self) -> Player:
+        assert self.done(), "Table game not over yet!"
+        winner: Player = max(self.state.players, key=lambda player: player.money)
+        return self.state.players[self.state.players.index(winner)]
 
     def reset(self) -> None:
         self._execute(Table.Event.RESET)
@@ -78,6 +93,9 @@ class Table:
         if not self.done():
             self._execute(self._q)
 
+    def round_underway(self) -> bool:
+        return self._q != Table.Event.NEW_ROUND
+
     def done(self) -> bool:
         return self._q == Table.Event.DONE
 
@@ -86,24 +104,27 @@ class Table:
         play_idx: int = state.player_at_hand_index
         play: Player = state.players[play_idx]
 
-        self._debug(f"Executing {event.name}")
+        self._logger.debug(f"Executing {event.name}")
 
         assert not play.folded
         assert not play.all_in
         assert play.money > 0
 
         if event == Table.Event.RESET:
-            self._loginfo("Resetting Table to init_state.")
+
+            self._logger.info("Resetting Table to init_state.")
             self.state = deepcopy(self._init_state)
-            self._queried : dict[int, bool] = {}
+            self._queried: dict[int, bool] = {}
             self._deck = Deck(shuffle=True)
             self.round_counter = 0
-            self._execute(Table.Event.NEW_ROUND)
+            self._schedule(Table.Event.NEW_ROUND)
         elif event == Table.Event.NEW_ROUND:
             # If we setup a table with only one player having money, we have a winner.
-            remain:Tuple[Player, ...] = tuple(play for play in state.players if play.money > 0)
+            remain: Tuple[Player, ...] = tuple(
+                play for play in state.players if play.money > 0
+            )
             if len(remain) == 1:
-                self._loginfo(f"We have a table winner! Player: {play_idx}")
+                self._logger.info(f"We have a table winner! Player: {play_idx}")
                 self._q = Table.Event.DONE
                 return
 
@@ -121,7 +142,9 @@ class Table:
                 # If current player is the small_blind.
                 if play_idx == state.small_blind_index:
                     small_bet: Money = min(state.small_blind_amount, play.money)
-                    self._loginfo(f"Small blind Player {play_idx} chips in {small_bet}")
+                    self._logger.info(
+                        f"Small blind Player {play_idx} chips in {small_bet}"
+                    )
                     play.all_in = small_bet == play.money
                     play.money -= small_bet
                     play.bet += small_bet
@@ -129,7 +152,7 @@ class Table:
                 # If current player is the small_blind.
                 if play_idx == state.big_blind_index:
                     big_bet: Money = min(state.big_blind_amount, play.money)
-                    self._loginfo(f"Big blind Player {play_idx} chips in {big_bet}")
+                    self._logger.info(f"Big blind Player {play_idx} chips in {big_bet}")
                     play.all_in = big_bet == play.money
                     play.money -= big_bet
                     play.bet += big_bet
@@ -144,14 +167,16 @@ class Table:
         elif event == Table.Event.START_BETTING_ROUND:
             UTG = self.__search_next_player(state.big_blind_index)
             self.state.player_at_hand_index = UTG
-            self._loginfo(f"Starting Betting Round {state.round.name} with Player {UTG}")
+            self._logger.info(
+                f"Starting Betting Round {state.round.name} with Player {UTG}"
+            )
 
             self._queried = {
                 idx: p.folded or p.money == 0 for idx, p in enumerate(state.players)
             }
             self._schedule(Table.Event.QUERY_PLAYER)
         elif event == Table.Event.QUERY_PLAYER:
-            
+
             assert len(play.cards) == 2
 
             # We arrive at a player that needs to make a move.
@@ -197,7 +222,15 @@ class Table:
         elif event == Table.Event.DETERMINE_WINNER:
             # Loop over all non-folded players that remain in the game with positive bet
             remaining_players = [
-                (idx, play, PokerHand.best(self.state.cards + play.cards) if len(self.state.cards + play.cards) == 7 else 0)
+                (
+                    idx,
+                    play,
+                    (
+                        PokerHand.best(self.state.cards + play.cards)
+                        if len(self.state.cards + play.cards) == 7
+                        else 0
+                    ),
+                )
                 for idx, play in enumerate(self.state.players)
                 if play.bet > 0 and not play.folded
             ]
@@ -205,11 +238,11 @@ class Table:
             # If there is only one player remaining.
             if len(remaining_players) == 1:
                 # Give the entire pot to the player.
-                win_idx:int = remaining_players[0][0]
+                win_idx: int = remaining_players[0][0]
 
-                self._loginfo(f"Player {win_idx} wins {self.state.pot()}!")
+                self._logger.info(f"Player {win_idx} wins {self.state.pot()}!")
                 self.state.players[win_idx].money += self.state.pot()
-                self._schedule(Table.Event.INCREMENT_BUTTONS)
+                self._execute(Table.Event.INCREMENT_BUTTONS)
                 return
             # Sort on score.
             remaining_players.sort(key=lambda x: x[2])
@@ -219,15 +252,20 @@ class Table:
             winner_idx = [x[0] for x in remaining_players if x[2] == max_score]
 
             # Take Profit.
-            self._loginfo(f"Community cards: {self.state.cards}")
+            self._logger.info(f"Community cards: {self.state.cards}")
             pot: Money = self.state.pot()
-            for idx, play, hand in remaining_players:
+            for idx, player, hand in remaining_players:
                 if idx in winner_idx:
-                    self._loginfo(f"Player {idx} cards: {play.cards}, Best {hand}")
-                    self._loginfo(f"Player {idx} wins €{pot // len(winner_idx)}")
-                    self.state.players[idx].money += pot // len(winner_idx)
+                    self._logger.info(
+                        f"Player {idx} cards: {player.cards}, Best {hand}"
+                    )
+                    self._logger.info(f"Player {idx} wins €{pot // len(winner_idx)}")
+                    player.money += pot // len(winner_idx)
+                    player.strategy.win(state, player, pot // len(winner_idx))
+                else:
+                    player.strategy.win(state, player, 0)
 
-            self._schedule(Table.Event.INCREMENT_BUTTONS)
+            self._execute(Table.Event.INCREMENT_BUTTONS)
         elif event == Table.Event.INCREMENT_BUTTONS:
             # Reset everything.
             for play in self.state.players:
@@ -280,12 +318,12 @@ class Table:
 
     def _get_player_action(self) -> Action:
         # Obtain the raw action from the strategy run by the player.
-        return self.state.current_player().strategy.make_action( # type: ignore
+        return self.state.current_player().strategy.make_action(  # type: ignore
             TableState.obscure_for_player(self.state, self.state.player_at_hand_index),
-            self.state.current_player()
+            self.state.current_player(),
         )
 
-    def _get_and_implement_player_action(self, quiet:bool = False) -> None:
+    def _get_and_implement_player_action(self, quiet: bool = False) -> None:
         self._implement_player_action(self._get_player_action(), quiet)
 
     def _implement_player_action(self, action: Action, quiet: bool = False):
@@ -303,7 +341,7 @@ class Table:
         elif action.type == Action.Type.ALL_IN:
             self.state.players[play_idx].all_in = True
 
-        self._logaction(f"Player {play_idx} {action}")
+        self._logger.info(f"Player {play_idx} {action}")
 
     def _validateAction(self, action: Action) -> Action:
         play_idx: int = self.state.player_at_hand_index
@@ -313,38 +351,48 @@ class Table:
 
         # Negative betting not allowed.
         if action.amount < 0:
-            self._warn(f"Player {play_idx} has negative action.amount: {amount}")
+            self._logger.warning(
+                f"Player {play_idx} has negative action.amount: {amount}"
+            )
             return foldAction
 
         # Fractional betting not allowed.
-        if int(action.amount) != action.amount :
-            self._warn(f"Player {play_idx} has fractional action.amount: {amount}")
+        if int(action.amount) != action.amount:
+            self._logger.warning(
+                f"Player {play_idx} has fractional action.amount: {amount}"
+            )
             return foldAction
 
         # Betting more than the player money not allowed.
         if action.amount > play_money:
-            self._warn(f"Player {play_idx} chips in {amount} but owns {play_money}")
-            return foldAction
-
-        if action.amount < self.state.call_amount():
-            self._warn(f"Player {play_idx} bets {action.amount} which is lower than the required amount {self.state.call_amount()}")
+            self._logger.warning(
+                f"Player {play_idx} chips in {amount} but owns {play_money}"
+            )
             return foldAction
 
         # Warning if the player folds with action.amount > 0
         # The user probably intended Action(Action.Type.FOLD, 0)
         if action.type == Action.Type.FOLD and amount > 0:
-            self._warn(f"Player {play_idx} FOLDED with {amount} > 0.")
+            self._logger.warning(f"Player {play_idx} FOLDED with {amount} > 0.")
             return foldAction
 
         # If we go all in but have money remaining
         if action.type == Action.Type.ALL_IN and amount < play_money:
-            self._warn(f"Player {play_idx} ALL INed but has €{play_money - amount}")
+            self._logger.warning(
+                f"Player {play_idx} ALL INed but has €{play_money - amount}"
+            )
             return foldAction
 
         # If we bet the remaining money
         # Silently convert to ALL_IN
         if action.amount == play_money:
             return Action(Action.Type.ALL_IN, play_money)
+
+        if action.amount < self.state.call_amount() and action.type != Action.Type.FOLD:
+            self._logger.warning(
+                f"Player {play_idx} {action.type.name} {action.amount} which is lower than the required amount {self.state.call_amount()}"
+            )
+            return foldAction
 
         # If we RAISE with 0.
         # Silently convert to CHECK.

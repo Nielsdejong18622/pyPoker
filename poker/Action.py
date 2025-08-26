@@ -4,9 +4,10 @@ from poker.Money import Money
 from dataclasses import dataclass
 from enum import Enum
 
+
 @dataclass
 class Action:
-    
+
     class Type(Enum):
         FOLD = 0
         RAISE = 2
@@ -14,6 +15,7 @@ class Action:
         CALL = 1
         CHECK = 3
         ALL_IN = 4
+
     type: Type
     amount: Money = 0
 

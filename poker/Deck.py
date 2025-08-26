@@ -4,6 +4,7 @@ from typing import List, Optional
 
 import random
 
+
 class Deck:
 
     def __init__(self, shuffle: bool = True):
@@ -40,4 +41,3 @@ class Deck:
 
     def __repr__(self):
         return f"<Deck with {len(self)} cards>"
-
